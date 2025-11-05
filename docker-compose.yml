@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: landlord
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: landlord_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    networks:
+      - landlord-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass password123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - landlord-network
+
+  mongodb:
+    image: mongo:6.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: landlord
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: landlord_documents
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - landlord-network
+
+  rabbitmq:
+    image: rabbitmq:3.11-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: landlord
+      RABBITMQ_DEFAULT_PASS: password123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - landlord-network
+
+  # Microservices
+  auth-service:
+    build:
+      context: ./services/auth-service
+      target: development
+    ports:
+      - "8081:8080"
+    environment:
+      NODE_ENV: development
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: landlord_db
+      DATABASE_USER: landlord
+      DATABASE_PASSWORD: password123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: password123
+      JWT_SECRET: jwt-secret-key
+      JWT_EXPIRY: 24h
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: landlord
+      RABBITMQ_PASSWORD: password123
+    volumes:
+      - ./services/auth-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - landlord-network
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      target: development
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
+      AUTH_SERVICE_URL: http://auth-service:8080
+      PROPERTY_SERVICE_URL: http://property-service:8080
+      RATE_LIMIT_WINDOW: 900
+      RATE_LIMIT_MAX: 100
+      RATE_LIMIT_SKIP: false
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    depends_on:
+      - auth-service
+    networks:
+      - landlord-network
+
+  property-service:
+    build:
+      context: ./services/property-service
+      target: development
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: landlord_db
+      DATABASE_USER: landlord
+      DATABASE_PASSWORD: password123
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      MONGODB_NAME: landlord_documents
+      MONGODB_USER: landlord
+      MONGODB_PASSWORD: password123
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: landlord
+      RABBITMQ_PASSWORD: password123
+    volumes:
+      - ./services/property-service:/app
+      - /app/target
+    depends_on:
+      - postgres
+      - mongodb
+      - rabbitmq
+    networks:
+      - landlord-network
+
+  # Frontend Services
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+      REACT_APP_ENV: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+    networks:
+      - landlord-network
+
+  admin-frontend:
+    build:
+      context: ./frontend-admin
+      target: development
+    ports:
+      - "3001:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+      REACT_APP_ENV: development
+    volumes:
+      - ./frontend-admin:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+    networks:
+      - landlord-network
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - landlord-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - landlord-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongodb_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  landlord-network:
+    driver: bridge

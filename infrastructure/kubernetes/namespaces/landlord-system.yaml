@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: landlord-system
+  labels:
+    name: landlord-system
+    environment: production
+    managed-by: kubernetes
+    project: landlord-management-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: landlord-system-staging
+  labels:
+    name: landlord-system-staging
+    environment: staging
+    managed-by: kubernetes
+    project: landlord-management-system

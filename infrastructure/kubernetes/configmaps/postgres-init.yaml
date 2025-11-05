@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: landlord-system
+  labels:
+    app: postgres
+data:
+  init.sql: |
+    -- Enable necessary extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+    CREATE EXTENSION IF NOT EXISTS "citext";
+    
+    -- Create database schema (will be replaced with full schema)
+    -- This is a placeholder - actual schema will be loaded via migration tools
+    
+    -- Create indexes for performance
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_properties_owner_id ON properties(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+    CREATE INDEX IF NOT EXISTS idx_payments_tenant_id ON payments(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_leases_property_id ON leases(property_id);
+    
+    -- Create audit trigger function
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = CURRENT_TIMESTAMP;
+      RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+    
+    -- Set up basic user permissions
+    ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+    GRANT CONNECT ON DATABASE landlord_db TO landlord;
+    
+    -- Performance settings for property management workload
+    ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+    ALTER SYSTEM SET max_connections = 200;
+    ALTER SYSTEM SET shared_buffers = '1GB';
+    ALTER SYSTEM SET effective_cache_size = '3GB';
+    ALTER SYSTEM SET maintenance_work_mem = '256MB';
+    ALTER SYSTEM SET checkpoint_completion_target = 0.9;

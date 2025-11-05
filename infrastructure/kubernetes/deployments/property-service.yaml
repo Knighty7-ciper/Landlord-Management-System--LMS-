@@ -1,0 +1,151 @@
+# Property Service Kubernetes Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: property-service-deployment
+  namespace: landlord-system
+  labels:
+    app: property-service
+    component: property-management
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: property-service
+      component: property-management
+  template:
+    metadata:
+      labels:
+        app: property-service
+        component: property-management
+    spec:
+      containers:
+      - name: property-service
+        image: landlord-system/property-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: DATABASE_HOST
+        - name: DATABASE_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: DATABASE_PORT
+        - name: DATABASE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: DATABASE_NAME
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: POSTGRES_USER
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: POSTGRES_PASSWORD
+        - name: DATABASE_SSL
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: DATABASE_SSL
+        - name: MONGODB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: MONGODB_HOST
+        - name: MONGODB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: MONGODB_PORT
+        - name: MONGODB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: MONGODB_NAME
+        - name: MONGODB_USER
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: MONGODB_USER
+        - name: MONGODB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: MONGODB_PASSWORD
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: RABBITMQ_HOST
+        - name: RABBITMQ_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: RABBITMQ_PORT
+        - name: RABBITMQ_USER
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: RABBITMQ_USER
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: RABBITMQ_PASSWORD
+        - name: JAVA_OPTS
+          value: "-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+      restartPolicy: Always
+
+---
+# Property Service Kubernetes Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: property-service
+  namespace: landlord-system
+  labels:
+    app: property-service
+    component: property-management
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: property-service
+    component: property-management

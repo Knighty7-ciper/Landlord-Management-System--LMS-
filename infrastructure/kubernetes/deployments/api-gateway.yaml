@@ -1,0 +1,108 @@
+# API Gateway Kubernetes Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway-deployment
+  namespace: landlord-system
+  labels:
+    app: api-gateway
+    component: api-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+      component: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        component: api-gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: landlord-system/api-gateway:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: AUTH_SERVICE_URL
+          value: "http://auth-service:8080"
+        - name: PROPERTY_SERVICE_URL
+          value: "http://property-service:8080"
+        - name: RATE_LIMIT_WINDOW
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: RATE_LIMIT_WINDOW
+        - name: RATE_LIMIT_MAX
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: RATE_LIMIT_MAX
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: landlord-secrets
+              key: JWT_SECRET
+        - name: API_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: API_TIMEOUT
+        - name: MAX_REQUEST_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: landlord-config
+              key: MAX_REQUEST_SIZE
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+      restartPolicy: Always
+
+---
+# API Gateway Kubernetes Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-service
+  namespace: landlord-system
+  labels:
+    app: api-gateway
+    component: api-gateway
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 443
+    targetPort: 8080
+    protocol: TCP
+    name: https
+  selector:
+    app: api-gateway
+    component: api-gateway
