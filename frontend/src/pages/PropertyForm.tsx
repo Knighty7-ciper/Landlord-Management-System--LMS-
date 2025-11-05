@@ -15,14 +15,27 @@ import {
   Building,
   Plus,
   X,
-  Loader2,
   AlertCircle,
-  Camera
+  Camera,
+  FileText,
+  Home,
+  DollarSign,
+  Calendar,
+  Shield,
+  Zap,
+  Settings
 } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
-import { propertyService } from '@/services/api'
-import MainLayout from '@/components/layout/MainLayout'
 
+// Import our component library
+import Button from '@/components/ui/Button'
+import Card from '@/components/ui/Card'
+import Alert from '@/components/ui/Alert'
+import Badge from '@/components/ui/Badge'
+import { Input } from '@/components/forms/Input'
+import { Select } from '@/components/forms/Select'
+
+// Property form interfaces
 interface PropertyFormData {
   name: string
   property_type: string
@@ -48,9 +61,57 @@ interface PropertyFormData {
   }
 }
 
-interface PropertyFormProps {}
+type PropertyType = 'SINGLE_FAMILY' | 'APARTMENT' | 'CONDO' | 'TOWNHOUSE' | 'DUPLEX' | 'COMMERCIAL'
+type PetPolicy = 'no_pets' | 'cats_allowed' | 'dogs_allowed' | 'all_pets_allowed'
+type SmokingPolicy = 'no_smoking' | 'smoking_allowed' | 'designated_areas'
 
-const PropertyForm: React.FC<PropertyFormProps> = () => {
+// Mock property service (in production this would be a real API service)
+const propertyService = {
+  getProperty: async (id: string) => {
+    // Mock implementation
+    return Promise.resolve({
+      id,
+      name: 'Sample Property',
+      property_type: 'APARTMENT',
+      monthly_rent: 1500,
+      deposit_amount: 1500,
+      description: 'Beautiful property with great amenities',
+      year_built: 2015,
+      square_footage: 1200,
+      bedrooms: 2,
+      bathrooms: 2,
+      parking_spaces: 2,
+      pet_policy: 'pets_allowed',
+      smoking_policy: 'no_smoking',
+      utilities_included: ['Water', 'Sewer'],
+      amenities: ['Pool', 'Gym'],
+      address: {
+        street: '123 Main St',
+        city: 'Springfield',
+        state: 'IL',
+        zip_code: '62701',
+        country: 'USA'
+      }
+    })
+  },
+  createProperty: async (data: PropertyFormData) => {
+    // Mock implementation
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return Promise.resolve({ data: { id: '1' } })
+  },
+  updateProperty: async (id: string, data: PropertyFormData) => {
+    // Mock implementation
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return Promise.resolve({ data: { id } })
+  },
+  uploadImages: async (propertyId: string, images: File[]) => {
+    // Mock implementation
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return Promise.resolve()
+  }
+}
+
+const PropertyForm: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -59,7 +120,7 @@ const PropertyForm: React.FC<PropertyFormProps> = () => {
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [newUtility, setNewUtility] = useState('')
   const [newAmenity, setNewAmenity] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const {
     control,
@@ -71,7 +132,7 @@ const PropertyForm: React.FC<PropertyFormProps> = () => {
   } = useForm<PropertyFormData>({
     defaultValues: {
       name: '',
-      property_type: 'SINGLE_FAMILY',
+      property_type: 'APARTMENT' as PropertyType,
       monthly_rent: 0,
       deposit_amount: 0,
       description: '',
@@ -80,8 +141,8 @@ const PropertyForm: React.FC<PropertyFormProps> = () => {
       bedrooms: undefined,
       bathrooms: undefined,
       parking_spaces: undefined,
-      pet_policy: 'no_pets',
-      smoking_policy: 'no_smoking',
+      pet_policy: 'no_pets' as PetPolicy,
+      smoking_policy: 'no_smoking' as SmokingPolicy,
       utilities_included: [],
       amenities: [],
       restrictions: '',
@@ -90,7 +151,7 @@ const PropertyForm: React.FC<PropertyFormProps> = () => {
         city: '',
         state: '',
         zip_code: '',
-        country: 'United States'
+        country: 'USA'
       }
     }
   })
@@ -208,577 +269,562 @@ const PropertyForm: React.FC<PropertyFormProps> = () => {
   )
 
   const onSubmit = async (data: PropertyFormData) => {
-    setSaving(true)
+    setIsSaving(true)
     try {
       await mutation.mutateAsync(data)
     } finally {
-      setSaving(false)
+      setIsSaving(false)
     }
   }
 
+  // Helper functions for form options
+  const getPropertyTypeOptions = () => [
+    { value: 'APARTMENT', label: 'Apartment' },
+    { value: 'CONDO', label: 'Condominium' },
+    { value: 'TOWNHOUSE', label: 'Townhouse' },
+    { value: 'SINGLE_FAMILY', label: 'Single Family' },
+    { value: 'DUPLEX', label: 'Duplex' },
+    { value: 'COMMERCIAL', label: 'Commercial' }
+  ]
+
+  const getPetPolicyOptions = () => [
+    { value: 'no_pets', label: 'No Pets' },
+    { value: 'cats_allowed', label: 'Cats Allowed' },
+    { value: 'dogs_allowed', label: 'Dogs Allowed' },
+    { value: 'all_pets_allowed', label: 'All Pets Allowed' }
+  ]
+
+  const getSmokingPolicyOptions = () => [
+    { value: 'no_smoking', label: 'No Smoking' },
+    { value: 'smoking_allowed', label: 'Smoking Allowed' },
+    { value: 'designated_areas', label: 'Designated Smoking Areas' }
+  ]
+
+  const getBedroomOptions = () => [
+    { value: '', label: 'Select' },
+    { value: '0', label: 'Studio' },
+    { value: '1', label: '1 Bedroom' },
+    { value: '2', label: '2 Bedrooms' },
+    { value: '3', label: '3 Bedrooms' },
+    { value: '4', label: '4 Bedrooms' },
+    { value: '5', label: '5+ Bedrooms' }
+  ]
+
+  const getBathroomOptions = () => [
+    { value: '', label: 'Select' },
+    { value: '1', label: '1 Bathroom' },
+    { value: '1.5', label: '1.5 Bathrooms' },
+    { value: '2', label: '2 Bathrooms' },
+    { value: '2.5', label: '2.5 Bathrooms' },
+    { value: '3', label: '3+ Bathrooms' }
+  ]
+
+  const getParkingOptions = () => [
+    { value: '', label: 'Select' },
+    { value: '0', label: 'No Parking' },
+    { value: '1', label: '1 Space' },
+    { value: '2', label: '2 Spaces' },
+    { value: '3', label: '3+ Spaces' }
+  ]
+
   if (isPropertyLoading) {
     return (
-      <MainLayout>
-        <div className="p-6">
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-            <span className="ml-2 text-gray-600">Loading property data...</span>
-          </div>
-        </div>
-      </MainLayout>
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">Loading property data...</span>
+      </div>
     )
   }
 
   return (
-    <MainLayout>
-      <div className="p-6 max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center space-x-4 mb-8">
-          <Link
+    <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mb-8">
+        <div className="flex items-center space-x-4">
+          <Button
+            as={Link}
             to="/properties"
-            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+            variant="outline"
+            size="sm"
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
           >
-            <ArrowLeft className="h-4 w-4 mr-1" />
             Back to Properties
-          </Link>
+          </Button>
           <div className="h-4 w-px bg-gray-300" />
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEditing ? 'Edit Property' : 'Add New Property'}
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isEditing ? 'Edit Property' : 'Add New Property'}
+            </h1>
+            <p className="text-sm text-gray-500">
+              {isEditing ? 'Update property information' : 'Create a new property listing'}
+            </p>
+          </div>
         </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          {/* Basic Information */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Basic Information</h2>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Property Name *
-                  </label>
-                  <Controller
-                    name="name"
-                    control={control}
-                    rules={{ required: 'Property name is required' }}
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="e.g., Maple Street Apartments"
-                      />
-                    )}
-                  />
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Property Type *
-                  </label>
-                  <Controller
-                    name="property_type"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        {...field}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      >
-                        <option value="SINGLE_FAMILY">Single Family</option>
-                        <option value="MULTI_FAMILY">Multi Family</option>
-                        <option value="APARTMENT">Apartment</option>
-                        <option value="CONDO">Condominium</option>
-                        <option value="TOWNHOUSE">Townhouse</option>
-                        <option value="COMMERCIAL">Commercial</option>
-                      </select>
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Monthly Rent ($) *
-                  </label>
-                  <Controller
-                    name="monthly_rent"
-                    control={control}
-                    rules={{ 
-                      required: 'Monthly rent is required',
-                      min: { value: 0, message: 'Rent must be positive' }
-                    }}
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="1500.00"
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                      />
-                    )}
-                  />
-                  {errors.monthly_rent && (
-                    <p className="mt-1 text-sm text-red-600">{errors.monthly_rent.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Security Deposit ($)
-                  </label>
-                  <Controller
-                    name="deposit_amount"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="1500.00"
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <Controller
-                  name="description"
-                  control={control}
-                  render={({ field }) => (
-                    <textarea
-                      {...field}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="Describe the property, its features, and anything tenants should know..."
-                    />
-                  )}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Property Details */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Property Details</h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bedrooms
-                  </label>
-                  <Controller
-                    name="bedrooms"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        {...field}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      >
-                        <option value="">Select</option>
-                        {[1, 2, 3, 4, 5, 6].map(num => (
-                          <option key={num} value={num}>{num}</option>
-                        ))}
-                      </select>
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bathrooms
-                  </label>
-                  <Controller
-                    name="bathrooms"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        {...field}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      >
-                        <option value="">Select</option>
-                        {[1, 1.5, 2, 2.5, 3, 3.5, 4].map(num => (
-                          <option key={num} value={num}>{num}</option>
-                        ))}
-                      </select>
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Square Footage
-                  </label>
-                  <Controller
-                    name="square_footage"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        type="number"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="1200"
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
-                      />
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Year Built
-                  </label>
-                  <Controller
-                    name="year_built"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        type="number"
-                        min="1800"
-                        max={new Date().getFullYear()}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="1995"
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
-                      />
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Parking Spaces
-                  </label>
-                  <Controller
-                    name="parking_spaces"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        {...field}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      >
-                        <option value="">Select</option>
-                        {[0, 1, 2, 3, 4].map(num => (
-                          <option key={num} value={num}>{num}</option>
-                        ))}
-                      </select>
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Pet Policy
-                  </label>
-                  <Controller
-                    name="pet_policy"
-                    control={control}
-                    render={({ field }) => (
-                      <select
-                        {...field}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      >
-                        <option value="no_pets">No Pets</option>
-                        <option value="cats_allowed">Cats Allowed</option>
-                        <option value="dogs_allowed">Dogs Allowed</option>
-                        <option value="all_pets_allowed">All Pets Allowed</option>
-                      </select>
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Address */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Address</h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Street Address *
-                  </label>
-                  <Controller
-                    name="address.street"
-                    control={control}
-                    rules={{ required: 'Street address is required' }}
-                    render={({ field }) => (
-                      <input
-                        {...field}
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="123 Main Street"
-                      />
-                    )}
-                  />
-                  {errors.address?.street && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.street.message}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      City *
-                    </label>
-                    <Controller
-                      name="address.city"
-                      control={control}
-                      rules={{ required: 'City is required' }}
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          placeholder="Anytown"
-                        />
-                      )}
-                    />
-                    {errors.address?.city && (
-                      <p className="mt-1 text-sm text-red-600">{errors.address.city.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      State *
-                    </label>
-                    <Controller
-                      name="address.state"
-                      control={control}
-                      rules={{ required: 'State is required' }}
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          type="text"
-                          maxLength={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          placeholder="CA"
-                        />
-                      )}
-                    />
-                    {errors.address?.state && (
-                      <p className="mt-1 text-sm text-red-600">{errors.address.state.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      ZIP Code *
-                    </label>
-                    <Controller
-                      name="address.zip_code"
-                      control={control}
-                      rules={{ required: 'ZIP code is required' }}
-                      render={({ field }) => (
-                        <input
-                          {...field}
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          placeholder="12345"
-                        />
-                      )}
-                    />
-                    {errors.address?.zip_code && (
-                      <p className="mt-1 text-sm text-red-600">{errors.address.zip_code.message}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Utilities and Amenities */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Utilities & Amenities</h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Utilities Included
-                  </label>
-                  <div className="space-y-3">
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={newUtility}
-                        onChange={(e) => setNewUtility(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="Add utility..."
-                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addUtility())}
-                      />
-                      <button
-                        type="button"
-                        onClick={addUtility}
-                        className="px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {watch('utilities_included').map((utility, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-                        >
-                          {utility}
-                          <button
-                            type="button"
-                            onClick={() => removeUtility(index)}
-                            className="ml-1 text-green-600 hover:text-green-800"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Amenities
-                  </label>
-                  <div className="space-y-3">
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={newAmenity}
-                        onChange={(e) => setNewAmenity(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="Add amenity..."
-                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAmenity())}
-                      />
-                      <button
-                        type="button"
-                        onClick={addAmenity}
-                        className="px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {watch('amenities').map((amenity, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                        >
-                          {amenity}
-                          <button
-                            type="button"
-                            onClick={() => removeAmenity(index)}
-                            className="ml-1 text-blue-600 hover:text-blue-800"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Image Upload */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Property Images</h2>
-            </div>
-            <div className="p-6">
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                  isDragActive 
-                    ? 'border-primary-400 bg-primary-50' 
-                    : 'border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                <input {...getInputProps()} />
-                <Camera className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">
-                  {isDragActive ? (
-                    'Drop the files here...'
-                  ) : (
-                    <>
-                      Drag & drop property images here, or{' '}
-                      <span className="text-primary-600 font-medium">browse</span>
-                    </>
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Supports JPEG, PNG, GIF, WebP up to 10MB each. Max 10 images.
-                </p>
-              </div>
-
-              {selectedImages.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {selectedImages.map((file, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <p className="mt-1 text-xs text-gray-600 truncate">{file.name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <div className="flex justify-end space-x-4">
-            <Link
-              to="/properties"
-              className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting || saving}
-              className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-            >
-              {isSubmitting || saving ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              {saving ? 'Saving...' : isEditing ? 'Update Property' : 'Create Property'}
-            </button>
-          </div>
-        </form>
       </div>
-    </MainLayout>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Basic Information */}
+        <Card>
+          <Card.Header>
+            <div className="flex items-center space-x-2">
+              <Home className="h-5 w-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
+            </div>
+          </Card.Header>
+          
+          <Card.Content className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Controller
+                name="name"
+                control={control}
+                rules={{ required: 'Property name is required' }}
+                render={({ field, fieldState }) => (
+                  <Input
+                    {...field}
+                    label="Property Name"
+                    placeholder="e.g., Maple Street Apartments"
+                    error={fieldState.error?.message}
+                    leftIcon={<Building className="h-4 w-4" />}
+                    required
+                  />
+                )}
+              />
+
+              <Controller
+                name="property_type"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Property Type"
+                    options={getPropertyTypeOptions()}
+                    leftIcon={<Building className="h-4 w-4" />}
+                    required
+                  />
+                )}
+              />
+
+              <Controller
+                name="monthly_rent"
+                control={control}
+                rules={{ 
+                  required: 'Monthly rent is required',
+                  min: { value: 0, message: 'Rent must be positive' }
+                }}
+                render={({ field, fieldState }) => (
+                  <Input
+                    {...field}
+                    type="number"
+                    label="Monthly Rent"
+                    placeholder="1500.00"
+                    error={fieldState.error?.message}
+                    leftIcon={<DollarSign className="h-4 w-4" />}
+                    right="$"
+                    min="0"
+                    step="0.01"
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    required
+                  />
+                )}
+              />
+
+              <Controller
+                name="deposit_amount"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    type="number"
+                    label="Security Deposit"
+                    placeholder="1500.00"
+                    leftIcon={<Shield className="h-4 w-4" />}
+                    right="$"
+                    min="0"
+                    step="0.01"
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  />
+                )}
+              />
+            </div>
+
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <Input
+                  {...field}
+                  label="Description"
+                  placeholder="Describe the property, its features, and anything tenants should know..."
+                  type="textarea"
+                  rows={4}
+                  leftIcon={<FileText className="h-4 w-4" />}
+                />
+              )}
+            />
+          </Card.Content>
+        </Card>
+
+        {/* Property Details */}
+        <Card>
+          <Card.Header>
+            <div className="flex items-center space-x-2">
+              <Settings className="h-5 w-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Property Details</h2>
+            </div>
+          </Card.Header>
+          
+          <Card.Content>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <Controller
+                name="bedrooms"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Bedrooms"
+                    options={getBedroomOptions()}
+                    leftIcon={<BedDouble className="h-4 w-4" />}
+                  />
+                )}
+              />
+
+              <Controller
+                name="bathrooms"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Bathrooms"
+                    options={getBathroomOptions()}
+                    leftIcon={<Bath className="h-4 w-4" />}
+                  />
+                )}
+              />
+
+              <Controller
+                name="square_footage"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    type="number"
+                    label="Square Footage"
+                    placeholder="1200"
+                    leftIcon={<Square className="h-4 w-4" />}
+                    right="sq ft"
+                    min="0"
+                    onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
+                  />
+                )}
+              />
+
+              <Controller
+                name="year_built"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    type="number"
+                    label="Year Built"
+                    placeholder="1995"
+                    leftIcon={<Calendar className="h-4 w-4" />}
+                    min="1800"
+                    max={new Date().getFullYear()}
+                    onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
+                  />
+                )}
+              />
+
+              <Controller
+                name="parking_spaces"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Parking Spaces"
+                    options={getParkingOptions()}
+                    leftIcon={<Car className="h-4 w-4" />}
+                  />
+                )}
+              />
+
+              <Controller
+                name="pet_policy"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Pet Policy"
+                    options={getPetPolicyOptions()}
+                    leftIcon={<Shield className="h-4 w-4" />}
+                  />
+                )}
+              />
+
+              <Controller
+                name="smoking_policy"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Smoking Policy"
+                    options={getSmokingPolicyOptions()}
+                    leftIcon={<Shield className="h-4 w-4" />}
+                  />
+                )}
+              />
+            </div>
+          </Card.Content>
+        </Card>
+
+        {/* Address */}
+        <Card>
+          <Card.Header>
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-5 w-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Address</h2>
+            </div>
+          </Card.Header>
+          
+          <Card.Content className="space-y-6">
+            <Controller
+              name="address.street"
+              control={control}
+              rules={{ required: 'Street address is required' }}
+              render={({ field, fieldState }) => (
+                <Input
+                  {...field}
+                  label="Street Address"
+                  placeholder="123 Main Street"
+                  error={fieldState.error?.message}
+                  leftIcon={<MapPin className="h-4 w-4" />}
+                  required
+                />
+              )}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Controller
+                name="address.city"
+                control={control}
+                rules={{ required: 'City is required' }}
+                render={({ field, fieldState }) => (
+                  <Input
+                    {...field}
+                    label="City"
+                    placeholder="Anytown"
+                    error={fieldState.error?.message}
+                    leftIcon={<MapPin className="h-4 w-4" />}
+                    required
+                  />
+                )}
+              />
+
+              <Controller
+                name="address.state"
+                control={control}
+                rules={{ required: 'State is required' }}
+                render={({ field, fieldState }) => (
+                  <Input
+                    {...field}
+                    label="State"
+                    placeholder="CA"
+                    error={fieldState.error?.message}
+                    leftIcon={<MapPin className="h-4 w-4" />}
+                    maxLength={2}
+                    required
+                  />
+                )}
+              />
+
+              <Controller
+                name="address.zip_code"
+                control={control}
+                rules={{ required: 'ZIP code is required' }}
+                render={({ field, fieldState }) => (
+                  <Input
+                    {...field}
+                    label="ZIP Code"
+                    placeholder="12345"
+                    error={fieldState.error?.message}
+                    leftIcon={<MapPin className="h-4 w-4" />}
+                    required
+                  />
+                )}
+              />
+            </div>
+          </Card.Content>
+        </Card>
+
+        {/* Utilities and Amenities */}
+        <Card>
+          <Card.Header>
+            <div className="flex items-center space-x-2">
+              <Zap className="h-5 w-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Utilities & Amenities</h2>
+            </div>
+          </Card.Header>
+          
+          <Card.Content>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Utilities Included */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Utilities Included
+                </label>
+                <div className="space-y-3">
+                  <div className="flex space-x-2">
+                    <Input
+                      value={newUtility}
+                      onChange={(e) => setNewUtility(e.target.value)}
+                      placeholder="Add utility..."
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addUtility())}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={addUtility}
+                      leftIcon={<Plus className="h-4 w-4" />}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {watch('utilities_included').map((utility, index) => (
+                      <Badge
+                        key={index}
+                        variant="success"
+                        className="cursor-pointer"
+                        onClick={() => removeUtility(index)}
+                      >
+                        {utility}
+                        <X className="h-3 w-3 ml-1" />
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Amenities */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Amenities
+                </label>
+                <div className="space-y-3">
+                  <div className="flex space-x-2">
+                    <Input
+                      value={newAmenity}
+                      onChange={(e) => setNewAmenity(e.target.value)}
+                      placeholder="Add amenity..."
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAmenity())}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={addAmenity}
+                      leftIcon={<Plus className="h-4 w-4" />}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {watch('amenities').map((amenity, index) => (
+                      <Badge
+                        key={index}
+                        variant="primary"
+                        className="cursor-pointer"
+                        onClick={() => removeAmenity(index)}
+                      >
+                        {amenity}
+                        <X className="h-3 w-3 ml-1" />
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card.Content>
+        </Card>
+
+        {/* Image Upload */}
+        <Card>
+          <Card.Header>
+            <div className="flex items-center space-x-2">
+              <Camera className="h-5 w-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Property Images</h2>
+            </div>
+          </Card.Header>
+          
+          <Card.Content>
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                isDragActive 
+                  ? 'border-blue-400 bg-blue-50' 
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <Camera className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-3 text-sm text-gray-600">
+                {isDragActive ? (
+                  'Drop the files here...'
+                ) : (
+                  <>
+                    Drag & drop property images here, or{' '}
+                    <span className="text-blue-600 font-medium">browse</span>
+                  </>
+                )}
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                Supports JPEG, PNG, GIF, WebP up to 10MB each. Max 10 images.
+              </p>
+            </div>
+
+            {selectedImages.length > 0 && (
+              <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {selectedImages.map((file, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={`Preview ${index + 1}`}
+                      className="w-full h-24 object-cover rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <p className="mt-2 text-xs text-gray-600 truncate">{file.name}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Form Actions */}
+        <div className="flex justify-end space-x-4">
+          <Button
+            as={Link}
+            to="/properties"
+            variant="outline"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            leftIcon={<Save className="h-4 w-4" />}
+            loading={isSubmitting || isSaving}
+          >
+            {isSaving ? 'Saving...' : isEditing ? 'Update Property' : 'Create Property'}
+          </Button>
+        </div>
+      </form>
+    </div>
   )
 }
 

@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { 
   Users,
   Plus,
-  Search,
+  Search as SearchIcon,
   Filter,
   Mail,
   Phone,
@@ -19,9 +19,20 @@ import {
   Edit,
   Trash2,
   UserPlus,
-  Building2
+  Building2,
+  MailOpen,
+  PhoneCall,
+  CalendarDays,
+  User
 } from 'lucide-react'
 import MainLayout from '@/components/layout/MainLayout'
+import { Search } from '@/components/data/Search'
+import { DataTable } from '@/components/data/DataTable'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { ActionDropdown } from '@/components/layout/Dropdown'
+import { ConfirmationModal } from '@/components/layout/Modal'
 
 // Mock tenant data - in real implementation, this would come from API
 const mockTenants = [
@@ -87,13 +98,40 @@ const mockTenants = [
   }
 ]
 
+interface Tenant {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  property_name: string
+  unit_number: string
+  lease_status: 'active' | 'pending' | 'expired' | 'terminated'
+  rent_amount: number
+  lease_start_date: string
+  lease_end_date: string
+  deposit_paid: boolean
+  created_at: string
+}
+
+interface TenantFilters {
+  search: string
+  status: string
+  property: string
+}
+
 interface TenantsProps {}
 
 const Tenants: React.FC<TenantsProps> = () => {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [propertyFilter, setPropertyFilter] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<TenantFilters>({
+    search: '',
+    status: 'all',
+    property: 'all'
+  })
+  const [selectedTenants, setSelectedTenants] = useState<string[]>([])
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [tenantToDelete, setTenantToDelete] = useState<string | null>(null)
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Tenant | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' })
 
   // Get unique properties for filter
   const uniqueProperties = Array.from(new Set(mockTenants.map(tenant => tenant.property_name)))
@@ -101,33 +139,119 @@ const Tenants: React.FC<TenantsProps> = () => {
   // Filter tenants based on search and filters
   const filteredTenants = mockTenants.filter(tenant => {
     const matchesSearch = 
-      tenant.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.property_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.unit_number.toLowerCase().includes(searchTerm.toLowerCase())
+      tenant.first_name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      tenant.last_name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      tenant.email.toLowerCase().includes(filters.search.toLowerCase()) ||
+      tenant.property_name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      tenant.unit_number.toLowerCase().includes(filters.search.toLowerCase())
 
-    const matchesStatus = statusFilter === 'all' || tenant.lease_status === statusFilter
-    const matchesProperty = propertyFilter === 'all' || tenant.property_name === propertyFilter
+    const matchesStatus = filters.status === 'all' || tenant.lease_status === filters.status
+    const matchesProperty = filters.property === 'all' || tenant.property_name === filters.property
 
     return matchesSearch && matchesStatus && matchesProperty
   })
 
-  // Get status badge color
-  const getStatusBadgeColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'expired':
-        return 'bg-red-100 text-red-800'
-      case 'terminated':
-        return 'bg-gray-100 text-gray-800'
+  // Handle sorting
+  const handleSort = (key: keyof Tenant) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  // Get sorted and filtered tenants
+  const sortedTenants = [...filteredTenants].sort((a, b) => {
+    if (!sortConfig.key) return 0
+    
+    const aValue = a[sortConfig.key]
+    const bValue = b[sortConfig.key]
+    
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return sortConfig.direction === 'asc' 
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue)
+    }
+    
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue
+    }
+    
+    return 0
+  })
+
+  // Bulk actions
+  const handleBulkAction = (action: string) => {
+    if (selectedTenants.length === 0) {
+      toast.error('Please select tenants first')
+      return
+    }
+    
+    switch (action) {
+      case 'delete':
+        setShowDeleteModal(true)
+        break
+      case 'export':
+        // Implement export functionality
+        toast.success(`Exporting ${selectedTenants.length} tenants`)
+        setSelectedTenants([])
+        break
       default:
-        return 'bg-gray-100 text-gray-800'
+        break
     }
   }
+
+  // Handle tenant deletion
+  const handleDeleteTenant = () => {
+    if (tenantToDelete) {
+      // In real implementation, this would be an API call
+      toast.success('Tenant deleted successfully')
+      setTenantToDelete(null)
+      setShowDeleteModal(false)
+    }
+  }
+
+  // Handle bulk deletion
+  const handleBulkDelete = () => {
+    // In real implementation, this would be an API call
+    toast.success(`${selectedTenants.length} tenants deleted successfully`)
+    setSelectedTenants([])
+    setShowDeleteModal(false)
+  }
+
+  // Clear all filters
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      status: 'all',
+      property: 'all'
+    })
+    setSelectedTenants([])
+  }
+
+  // Status badge variants
+  const getStatusVariant = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'success' as const
+      case 'pending':
+        return 'warning' as const
+      case 'expired':
+        return 'danger' as const
+      case 'terminated':
+        return 'secondary' as const
+      default:
+        return 'secondary' as const
+    }
+  }
+
+  // Filter options
+  const statusOptions = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'active', label: 'Active' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'terminated', label: 'Terminated' }
+  ]
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -147,7 +271,7 @@ const Tenants: React.FC<TenantsProps> = () => {
     <MainLayout>
       <div className="p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -156,328 +280,321 @@ const Tenants: React.FC<TenantsProps> = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
-            </button>
+            {selectedTenants.length > 0 && (
+              <ActionDropdown
+                trigger={
+                  <Button variant="outline" size="sm">
+                    Actions ({selectedTenants.length})
+                  </Button>
+                }
+                items={[
+                  { label: 'Export Selected', icon: FileText, onClick: () => handleBulkAction('export') },
+                  { type: 'divider' },
+                  { label: 'Delete Selected', icon: Trash2, onClick: () => handleBulkAction('delete'), variant: 'danger' }
+                ]}
+              />
+            )}
             
-            <Link
-              to="/tenants/new"
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add Tenant
+            <Link to="/tenants/new">
+              <Button>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Tenant
+              </Button>
             </Link>
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <Users className="h-8 w-8 text-primary-600" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+          <Card>
+            <Card.Content className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Users className="h-8 w-8 text-primary-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Total Tenants</p>
+                  <p className="text-2xl font-semibold text-gray-900">{mockTenants.length}</p>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Total Tenants</p>
-                <p className="text-2xl font-semibold text-gray-900">{mockTenants.length}</p>
-              </div>
-            </div>
-          </div>
+            </Card.Content>
+          </Card>
           
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <FileText className="h-8 w-8 text-green-600" />
+          <Card>
+            <Card.Content className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <FileText className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Active Leases</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {mockTenants.filter(t => t.lease_status === 'active').length}
+                  </p>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Active Leases</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {mockTenants.filter(t => t.lease_status === 'active').length}
-                </p>
-              </div>
-            </div>
-          </div>
+            </Card.Content>
+          </Card>
           
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <Calendar className="h-8 w-8 text-yellow-600" />
+          <Card>
+            <Card.Content className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Calendar className="h-8 w-8 text-yellow-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Expiring Soon</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {mockTenants.filter(t => isLeaseExpiringSoon(t.lease_end_date)).length}
+                  </p>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Expiring Soon</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {mockTenants.filter(t => isLeaseExpiringSoon(t.lease_end_date)).length}
-                </p>
-              </div>
-            </div>
-          </div>
+            </Card.Content>
+          </Card>
           
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <DollarSign className="h-8 w-8 text-blue-600" />
+          <Card>
+            <Card.Content className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <DollarSign className="h-8 w-8 text-blue-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
+                  <p className="text-2xl font-semibold text-gray-900">
+                    ${mockTenants.filter(t => t.lease_status === 'active').reduce((sum, t) => sum + t.rent_amount, 0).toLocaleString()}
+                  </p>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  ${mockTenants.filter(t => t.lease_status === 'active').reduce((sum, t) => sum + t.rent_amount, 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </div>
+            </Card.Content>
+          </Card>
         </div>
 
         {/* Search and Filters */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="p-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search tenants by name, email, or property..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+        <Card className="mb-6">
+          <Card.Content className="p-6">
+            <div className="flex flex-col gap-4">
+              <Search
+                placeholder="Search tenants by name, email, or property..."
+                value={filters.search}
+                onChange={(value) => setFilters(prev => ({ ...prev, search: value }))}
+                suggestions={mockTenants.flatMap(tenant => [
+                  `${tenant.first_name} ${tenant.last_name}`,
+                  tenant.email,
+                  tenant.property_name
+                ])}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lease Status
+                  </label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    {statusOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Property
+                  </label>
+                  <select
+                    value={filters.property}
+                    onChange={(e) => setFilters(prev => ({ ...prev, property: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="all">All Properties</option>
+                    {uniqueProperties.map(property => (
+                      <option key={property} value={property}>{property}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <Button variant="outline" onClick={clearFilters} className="w-full">
+                    Clear Filters
+                  </Button>
                 </div>
               </div>
             </div>
-
-            {showFilters && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Lease Status
-                    </label>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="active">Active</option>
-                      <option value="pending">Pending</option>
-                      <option value="expired">Expired</option>
-                      <option value="terminated">Terminated</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Property
-                    </label>
-                    <select
-                      value={propertyFilter}
-                      onChange={(e) => setPropertyFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="all">All Properties</option>
-                      {uniqueProperties.map(property => (
-                        <option key={property} value={property}>{property}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      onClick={() => {
-                        setSearchTerm('')
-                        setStatusFilter('all')
-                        setPropertyFilter('all')
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Clear Filters
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+          </Card.Content>
+        </Card>
 
         {/* Tenants Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">
-              Tenants ({filteredTenants.length})
-            </h2>
-          </div>
-
-          {filteredTenants.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tenant
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Property
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Lease Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Rent
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Lease End
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredTenants.map((tenant) => (
-                    <tr key={tenant.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                              <span className="text-sm font-medium text-primary-800">
-                                {tenant.first_name[0]}{tenant.last_name[0]}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {tenant.first_name} {tenant.last_name}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Added {formatDate(tenant.created_at)}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Building2 className="h-4 w-4 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {tenant.property_name}
-                            </div>
-                            {tenant.unit_number && (
-                              <div className="text-sm text-gray-500">
-                                Unit {tenant.unit_number}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(tenant.lease_status)}`}>
-                            {tenant.lease_status.charAt(0).toUpperCase() + tenant.lease_status.slice(1)}
-                          </span>
-                          {isLeaseExpiringSoon(tenant.lease_end_date) && (
-                            <span className="text-xs text-yellow-600 mt-1">
-                              Expires soon
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          ${tenant.rent_amount.toLocaleString()}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {tenant.deposit_paid ? (
-                            <span className="text-green-600">Deposit paid</span>
-                          ) : (
-                            <span className="text-red-600">Deposit pending</span>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatDate(tenant.lease_end_date)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Started {formatDate(tenant.lease_start_date)}
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex space-x-2">
-                          <a
-                            href={`mailto:${tenant.email}`}
-                            className="text-primary-600 hover:text-primary-900"
-                          >
-                            <Mail className="h-4 w-4" />
-                          </a>
-                          <a
-                            href={`tel:${tenant.phone}`}
-                            className="text-primary-600 hover:text-primary-900"
-                          >
-                            <Phone className="h-4 w-4" />
-                          </a>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Link
-                            to={`/tenants/${tenant.id}`}
-                            className="text-primary-600 hover:text-primary-900"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                          <Link
-                            to={`/tenants/${tenant.id}/edit`}
-                            className="text-gray-600 hover:text-gray-900"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                          <button className="text-red-600 hover:text-red-900">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Users className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No tenants found</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {searchTerm || statusFilter !== 'all' || propertyFilter !== 'all' 
-                  ? 'Try adjusting your search or filters.'
-                  : 'Get started by adding your first tenant.'
-                }
-              </p>
-              {!searchTerm && statusFilter === 'all' && propertyFilter === 'all' && (
-                <div className="mt-6">
-                  <Link
-                    to="/tenants/new"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Add First Tenant
-                  </Link>
+        <DataTable
+          data={sortedTenants}
+          columns={[
+            {
+              key: 'tenant',
+              label: 'Tenant',
+              sortable: true,
+              render: (tenant: Tenant) => (
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 h-10 w-10">
+                    <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                      <span className="text-sm font-medium text-primary-800">
+                        {tenant.first_name[0]}{tenant.last_name[0]}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="ml-4">
+                    <div className="text-sm font-medium text-gray-900">
+                      {tenant.first_name} {tenant.last_name}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Added {formatDate(tenant.created_at)}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              )
+            },
+            {
+              key: 'property',
+              label: 'Property',
+              sortable: true,
+              render: (tenant: Tenant) => (
+                <div className="flex items-center">
+                  <Building2 className="h-4 w-4 text-gray-400 mr-2" />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {tenant.property_name}
+                    </div>
+                    {tenant.unit_number && (
+                      <div className="text-sm text-gray-500">
+                        Unit {tenant.unit_number}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            },
+            {
+              key: 'lease_status',
+              label: 'Status',
+              sortable: true,
+              render: (tenant: Tenant) => (
+                <div className="flex flex-col gap-1">
+                  <Badge variant={getStatusVariant(tenant.lease_status)}>
+                    {tenant.lease_status.charAt(0).toUpperCase() + tenant.lease_status.slice(1)}
+                  </Badge>
+                  {isLeaseExpiringSoon(tenant.lease_end_date) && (
+                    <span className="text-xs text-yellow-600">
+                      Expires soon
+                    </span>
+                  )}
+                </div>
+              )
+            },
+            {
+              key: 'rent_amount',
+              label: 'Rent',
+              sortable: true,
+              render: (tenant: Tenant) => (
+                <div>
+                  <div className="text-sm font-medium text-gray-900">
+                    ${tenant.rent_amount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {tenant.deposit_paid ? (
+                      <span className="text-green-600">Deposit paid</span>
+                    ) : (
+                      <span className="text-red-600">Deposit pending</span>
+                    )}
+                  </div>
+                </div>
+              )
+            },
+            {
+              key: 'lease_end_date',
+              label: 'Lease End',
+              sortable: true,
+              render: (tenant: Tenant) => (
+                <div>
+                  <div className="text-sm text-gray-900">
+                    {formatDate(tenant.lease_end_date)}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Started {formatDate(tenant.lease_start_date)}
+                  </div>
+                </div>
+              )
+            },
+            {
+              key: 'contact',
+              label: 'Contact',
+              render: (tenant: Tenant) => (
+                <div className="flex space-x-2">
+                  <Button variant="ghost" size="sm" asChild>
+                    <a href={`mailto:${tenant.email}`}>
+                      <MailOpen className="h-4 w-4" />
+                    </a>
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <a href={`tel:${tenant.phone}`}>
+                      <PhoneCall className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </div>
+              )
+            },
+            {
+              key: 'actions',
+              label: 'Actions',
+              render: (tenant: Tenant) => (
+                <ActionDropdown
+                  items={[
+                    { label: 'View Details', icon: Eye, onClick: () => window.location.href = `/tenants/${tenant.id}` },
+                    { label: 'Edit', icon: Edit, onClick: () => window.location.href = `/tenants/${tenant.id}/edit` },
+                    { type: 'divider' },
+                    { label: 'Delete', icon: Trash2, onClick: () => { setTenantToDelete(tenant.id); setShowDeleteModal(true) }, variant: 'danger' }
+                  ]}
+                />
+              )
+            }
+          ]}
+          sortConfig={sortConfig}
+          onSort={handleSort}
+          selectable
+          selectedItems={selectedTenants}
+          onSelectionChange={setSelectedTenants}
+          emptyState={{
+            icon: User,
+            title: 'No tenants found',
+            description: filters.search || filters.status !== 'all' || filters.property !== 'all' 
+              ? 'Try adjusting your search or filters.'
+              : 'Get started by adding your first tenant.',
+            action: filters.search === '' && filters.status === 'all' && filters.property === 'all' ? {
+              label: 'Add First Tenant',
+              icon: UserPlus,
+              onClick: () => window.location.href = '/tenants/new'
+            } : undefined
+          }}
+          title={`Tenants (${sortedTenants.length})`}
+        />
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false)
+            setTenantToDelete(null)
+          }}
+          onConfirm={tenantToDelete ? handleDeleteTenant : handleBulkDelete}
+          title={tenantToDelete ? 'Delete Tenant' : 'Delete Selected Tenants'}
+          message={
+            tenantToDelete 
+              ? 'Are you sure you want to delete this tenant? This action cannot be undone.'
+              : `Are you sure you want to delete ${selectedTenants.length} selected tenants? This action cannot be undone.`
+          }
+          confirmText="Delete"
+          variant="danger"
+        />
       </div>
     </MainLayout>
   )

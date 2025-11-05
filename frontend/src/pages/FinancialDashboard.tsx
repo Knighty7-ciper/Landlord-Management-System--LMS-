@@ -18,10 +18,24 @@ import {
   Users,
   FileText,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Search,
+  MoreVertical,
+  Eye,
+  Edit,
+  Trash2,
+  Send
 } from 'lucide-react'
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell } from 'recharts'
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts'
 import MainLayout from '@/components/layout/MainLayout'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { ActionDropdown } from '@/components/ui/ActionDropdown'
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
+import { SearchInput } from '@/components/ui/Search'
+import { DataTable } from '@/components/ui/DataTable'
+import { Select } from '@/components/ui/Select'
 
 // Mock financial data
 const mockRevenueData = [
@@ -127,9 +141,60 @@ const mockOutstandingPayments = [
 
 interface FinancialDashboardProps {}
 
+interface Transaction {
+  id: string
+  date: string
+  description: string
+  type: 'income' | 'expense'
+  amount: number
+  category: string
+  tenant_name?: string
+  vendor?: string
+  status: 'completed' | 'pending' | 'failed'
+}
+
+interface OutstandingPayment {
+  id: string
+  tenant_name: string
+  property_name: string
+  unit_number: string
+  amount: number
+  due_date: string
+  days_overdue: number
+  payment_type: string
+}
+
+interface TransactionFilters {
+  search: string
+  type: string
+  status: string
+  category: string
+  dateRange: string
+}
+
+interface TransactionSortConfig {
+  key: keyof Transaction | null
+  direction: 'asc' | 'desc'
+}
+
 const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('12m')
   const [selectedMetric, setSelectedMetric] = useState('revenue')
+  const [transactions, setTransactions] = useState<Transaction[]>(mockRecentTransactions)
+  const [outstandingPayments, setOutstandingPayments] = useState<OutstandingPayment[]>(mockOutstandingPayments)
+  const [filters, setFilters] = useState<TransactionFilters>({
+    search: '',
+    type: '',
+    status: '',
+    category: '',
+    dateRange: ''
+  })
+  const [sortConfig, setSortConfig] = useState<TransactionSortConfig>({ key: null, direction: 'asc' })
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([])
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // Calculate totals
   const currentMonthRevenue = mockRevenueData[mockRevenueData.length - 1].revenue
@@ -141,6 +206,85 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
 
   const totalOutstanding = mockOutstandingPayments.reduce((sum, payment) => sum + payment.amount, 0)
   const occupancyRate = 85 // Mock data
+
+  // Filter and sort transactions
+  const filteredTransactions = transactions.filter(transaction => {
+    const matchesSearch = transaction.description.toLowerCase().includes(filters.search.toLowerCase()) ||
+                         (transaction.tenant_name?.toLowerCase().includes(filters.search.toLowerCase()) ?? false) ||
+                         (transaction.vendor?.toLowerCase().includes(filters.search.toLowerCase()) ?? false)
+    const matchesType = !filters.type || transaction.type === filters.type
+    const matchesStatus = !filters.status || transaction.status === filters.status
+    const matchesCategory = !filters.category || transaction.category === filters.category
+    return matchesSearch && matchesType && matchesStatus && matchesCategory
+  })
+
+  // Sort transactions
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    if (!sortConfig.key) return 0
+    const aValue = a[sortConfig.key]
+    const bValue = b[sortConfig.key]
+    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+    return 0
+  })
+
+  // Pagination
+  const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedTransactions = sortedTransactions.slice(startIndex, startIndex + itemsPerPage)
+
+  const handleSort = (key: keyof Transaction) => {
+    let direction: 'asc' | 'desc' = 'asc'
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const handleSelectTransaction = (id: string) => {
+    setSelectedTransactions(prev => 
+      prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
+    )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedTransactions.length === paginatedTransactions.length) {
+      setSelectedTransactions([])
+    } else {
+      setSelectedTransactions(paginatedTransactions.map(t => t.id))
+    }
+  }
+
+  const handleDeleteTransaction = (id: string) => {
+    setTransactionToDelete(id)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDelete = () => {
+    if (transactionToDelete) {
+      setTransactions(prev => prev.filter(t => t.id !== transactionToDelete))
+      setShowDeleteModal(false)
+      setTransactionToDelete(null)
+    }
+  }
+
+  const handleBulkAction = (action: string) => {
+    switch (action) {
+      case 'export':
+        console.log('Exporting transactions:', selectedTransactions)
+        break
+      case 'delete':
+        setTransactions(prev => prev.filter(t => !selectedTransactions.includes(t.id)))
+        setSelectedTransactions([])
+        break
+      case 'mark_completed':
+        setTransactions(prev => prev.map(t => 
+          selectedTransactions.includes(t.id) ? { ...t, status: 'completed' } : t
+        ))
+        setSelectedTransactions([])
+        break
+    }
+  }
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -155,7 +299,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      year: 'numeric'
     })
   }
 
@@ -172,149 +317,150 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            <select
+            <Select
               value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              onValueChange={setSelectedPeriod}
+              placeholder="Select period"
             >
               <option value="3m">Last 3 months</option>
               <option value="6m">Last 6 months</option>
               <option value="12m">Last 12 months</option>
               <option value="24m">Last 24 months</option>
-            </select>
+            </Select>
             
-            <button className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            <Button variant="outline" className="inline-flex items-center">
               <Download className="h-4 w-4 mr-2" />
               Export
-            </button>
+            </Button>
             
-            <Link
-              to="/payments/new"
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Record Payment
+            <Link to="/payments/new">
+              <Button className="inline-flex items-center">
+                <Plus className="h-4 w-4 mr-2" />
+                Record Payment
+              </Button>
             </Link>
           </div>
         </div>
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <DollarSign className="h-8 w-8 text-green-600" />
-              </div>
-              <div className="ml-4 flex-1">
-                <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
-                <div className="flex items-baseline">
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {formatCurrency(currentMonthRevenue)}
-                  </p>
-                  <p className={`ml-2 flex items-baseline text-sm font-semibold ${
-                    revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {revenueGrowth >= 0 ? (
-                      <ArrowUpRight className="h-4 w-4 mr-1" />
-                    ) : (
-                      <ArrowDownRight className="h-4 w-4 mr-1" />
-                    )}
-                    {Math.abs(revenueGrowth).toFixed(1)}%
-                  </p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <DollarSign className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="ml-4 flex-1">
+                  <p className="text-sm font-medium text-gray-500">Monthly Revenue</p>
+                  <div className="flex items-baseline">
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {formatCurrency(currentMonthRevenue)}
+                    </p>
+                    <p className={`ml-2 flex items-baseline text-sm font-semibold ${
+                      revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {revenueGrowth >= 0 ? (
+                        <ArrowUpRight className="h-4 w-4 mr-1" />
+                      ) : (
+                        <ArrowDownRight className="h-4 w-4 mr-1" />
+                      )}
+                      {Math.abs(revenueGrowth).toFixed(1)}%
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <TrendingUp className="h-8 w-8 text-blue-600" />
-              </div>
-              <div className="ml-4 flex-1">
-                <p className="text-sm font-medium text-gray-500">Monthly Profit</p>
-                <div className="flex items-baseline">
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {formatCurrency(currentMonthProfit)}
-                  </p>
-                  <p className="ml-2 text-sm font-medium text-gray-500">
-                    {((currentMonthProfit / currentMonthRevenue) * 100).toFixed(0)}% margin
-                  </p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <TrendingUp className="h-8 w-8 text-blue-600" />
+                </div>
+                <div className="ml-4 flex-1">
+                  <p className="text-sm font-medium text-gray-500">Monthly Profit</p>
+                  <div className="flex items-baseline">
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {formatCurrency(currentMonthProfit)}
+                    </p>
+                    <p className="ml-2 text-sm font-medium text-gray-500">
+                      {((currentMonthProfit / currentMonthRevenue) * 100).toFixed(0)}% margin
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <TrendingDown className="h-8 w-8 text-red-600" />
-              </div>
-              <div className="ml-4 flex-1">
-                <p className="text-sm font-medium text-gray-500">Monthly Expenses</p>
-                <div className="flex items-baseline">
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {formatCurrency(currentMonthExpenses)}
-                  </p>
-                  <p className="ml-2 text-sm font-medium text-gray-500">
-                    {((currentMonthExpenses / currentMonthRevenue) * 100).toFixed(0)}% of revenue
-                  </p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <TrendingDown className="h-8 w-8 text-red-600" />
+                </div>
+                <div className="ml-4 flex-1">
+                  <p className="text-sm font-medium text-gray-500">Monthly Expenses</p>
+                  <div className="flex items-baseline">
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {formatCurrency(currentMonthExpenses)}
+                    </p>
+                    <p className="ml-2 text-sm font-medium text-gray-500">
+                      {((currentMonthExpenses / currentMonthRevenue) * 100).toFixed(0)}% of revenue
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <AlertCircle className="h-8 w-8 text-yellow-600" />
-              </div>
-              <div className="ml-4 flex-1">
-                <p className="text-sm font-medium text-gray-500">Outstanding</p>
-                <div className="flex items-baseline">
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {formatCurrency(totalOutstanding)}
-                  </p>
-                  <p className="ml-2 text-sm font-medium text-gray-500">
-                    {mockOutstandingPayments.length} payments
-                  </p>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="h-8 w-8 text-yellow-600" />
+                </div>
+                <div className="ml-4 flex-1">
+                  <p className="text-sm font-medium text-gray-500">Outstanding</p>
+                  <div className="flex items-baseline">
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {formatCurrency(totalOutstanding)}
+                    </p>
+                    <p className="ml-2 text-sm font-medium text-gray-500">
+                      {mockOutstandingPayments.length} payments
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Revenue Chart */}
-          <div className="lg:col-span-2 bg-white rounded-lg shadow">
-            <div className="p-6 border-b border-gray-200">
+          <Card className="lg:col-span-2">
+            <CardHeader>
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">Revenue & Profit Trend</h3>
+                <CardTitle>Revenue & Profit Trend</CardTitle>
                 <div className="flex space-x-2">
-                  <button
+                  <Button
+                    variant={selectedMetric === 'revenue' ? 'default' : 'outline'}
+                    size="sm"
                     onClick={() => setSelectedMetric('revenue')}
-                    className={`px-3 py-1 text-sm rounded-md ${
-                      selectedMetric === 'revenue'
-                        ? 'bg-primary-100 text-primary-800'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
                   >
                     Revenue
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={selectedMetric === 'profit' ? 'default' : 'outline'}
+                    size="sm"
                     onClick={() => setSelectedMetric('profit')}
-                    className={`px-3 py-1 text-sm rounded-md ${
-                      selectedMetric === 'profit'
-                        ? 'bg-primary-100 text-primary-800'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
                   >
                     Profit
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </div>
-            <div className="p-6">
+            </CardHeader>
+            <CardContent>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={mockRevenueData}>
@@ -333,15 +479,15 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Expense Breakdown */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Expense Breakdown</h3>
-            </div>
-            <div className="p-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Expense Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsPieChart>
@@ -376,58 +522,177 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Transactions */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Recent Transactions</h3>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {mockRecentTransactions.map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center">
-                      <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center ${
-                        transaction.type === 'income' ? 'bg-green-100' : 'bg-red-100'
-                      }`}>
-                        {transaction.type === 'income' ? (
-                          <ArrowUpRight className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <ArrowDownRight className="h-5 w-5 text-red-600" />
-                        )}
-                      </div>
-                      <div className="ml-4">
+        {/* Transactions Section */}
+        <div className="mb-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Recent Transactions</CardTitle>
+                <div className="flex items-center space-x-3">
+                  <SearchInput
+                    placeholder="Search transactions..."
+                    value={filters.search}
+                    onChange={(value) => setFilters(prev => ({ ...prev, search: value }))}
+                    className="w-64"
+                  />
+                  <Select
+                    value={filters.type}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}
+                    placeholder="Type"
+                  >
+                    <option value="">All Types</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </Select>
+                  <Select
+                    value={filters.status}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
+                    placeholder="Status"
+                  >
+                    <option value="">All Status</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                  </Select>
+                  <Select
+                    value={filters.category}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, category: value }))}
+                    placeholder="Category"
+                  >
+                    <option value="">All Categories</option>
+                    <option value="rent">Rent</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="insurance">Insurance</option>
+                  </Select>
+                </div>
+              </div>
+              {selectedTransactions.length > 0 && (
+                <div className="flex items-center space-x-2 mt-4">
+                  <span className="text-sm text-gray-600">
+                    {selectedTransactions.length} selected
+                  </span>
+                  <ActionDropdown
+                    actions={[
+                      { id: 'export', label: 'Export Selected', icon: Download },
+                      { id: 'mark_completed', label: 'Mark as Completed', icon: CheckCircle },
+                      { id: 'delete', label: 'Delete Selected', icon: Trash2, variant: 'destructive' }
+                    ]}
+                    onActionSelect={handleBulkAction}
+                  />
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={paginatedTransactions}
+                columns={[
+                  {
+                    key: 'checkbox',
+                    header: (
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactions.length === paginatedTransactions.length && paginatedTransactions.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded border-gray-300"
+                      />
+                    ),
+                    render: (transaction: Transaction) => (
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactions.includes(transaction.id)}
+                        onChange={() => handleSelectTransaction(transaction.id)}
+                        className="rounded border-gray-300"
+                      />
+                    )
+                  },
+                  {
+                    key: 'description',
+                    header: 'Description',
+                    sortable: true,
+                    render: (transaction: Transaction) => (
+                      <div>
                         <p className="text-sm font-medium text-gray-900">
                           {transaction.description}
                         </p>
-                        <div className="flex items-center text-sm text-gray-500 space-x-2">
-                          <span>{formatDate(transaction.date)}</span>
-                          <span>•</span>
-                          <span className="capitalize">{transaction.category}</span>
-                        </div>
+                        <p className="text-xs text-gray-500 capitalize">
+                          {transaction.category} • {transaction.type === 'income' ? transaction.tenant_name : transaction.vendor}
+                        </p>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-medium ${
+                    )
+                  },
+                  {
+                    key: 'date',
+                    header: 'Date',
+                    sortable: true,
+                    render: (transaction: Transaction) => (
+                      <span className="text-sm text-gray-500">
+                        {formatDate(transaction.date)}
+                      </span>
+                    )
+                  },
+                  {
+                    key: 'amount',
+                    header: 'Amount',
+                    sortable: true,
+                    render: (transaction: Transaction) => (
+                      <span className={`text-sm font-medium ${
                         transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {transaction.type === 'income' ? '+' : ''}{formatCurrency(transaction.amount)}
-                      </p>
-                      <div className="flex items-center justify-end mt-1">
-                        {transaction.status === 'completed' ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-yellow-500" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </span>
+                    )
+                  },
+                  {
+                    key: 'status',
+                    header: 'Status',
+                    render: (transaction: Transaction) => (
+                      <Badge
+                        variant={
+                          transaction.status === 'completed' ? 'success' :
+                          transaction.status === 'pending' ? 'warning' : 'destructive'
+                        }
+                      >
+                        {transaction.status}
+                      </Badge>
+                    )
+                  },
+                  {
+                    key: 'actions',
+                    header: 'Actions',
+                    render: (transaction: Transaction) => (
+                      <ActionDropdown
+                        actions={[
+                          { id: 'view', label: 'View Details', icon: Eye },
+                          { id: 'edit', label: 'Edit', icon: Edit },
+                          { id: 'receipt', label: 'Receipt', icon: FileText },
+                          { id: 'delete', label: 'Delete', icon: Trash2, variant: 'destructive' }
+                        ]}
+                        onActionSelect={(action) => {
+                          if (action === 'delete') {
+                            handleDeleteTransaction(transaction.id)
+                          } else {
+                            console.log(`${action} transaction:`, transaction.id)
+                          }
+                        }}
+                      />
+                    )
+                  }
+                ]}
+                onSort={handleSort}
+                sortConfig={sortConfig}
+                pagination={{
+                  currentPage,
+                  totalPages,
+                  onPageChange: setCurrentPage,
+                  itemsPerPage,
+                  onItemsPerPageChange: setItemsPerPage,
+                  totalItems: sortedTransactions.length
+                }}
+              />
               <div className="mt-6 text-center">
                 <Link
                   to="/transactions"
@@ -436,18 +701,21 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
                   View all transactions →
                 </Link>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Outstanding Payments */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Outstanding Payments</h3>
-            </div>
-            <div className="p-6">
-              {mockOutstandingPayments.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Outstanding Payments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {outstandingPayments.length > 0 ? (
                 <div className="space-y-4">
-                  {mockOutstandingPayments.map((payment) => (
+                  {outstandingPayments.map((payment) => (
                     <div key={payment.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
@@ -469,9 +737,21 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
                         <p className="text-sm font-medium text-gray-900">
                           {formatCurrency(payment.amount)}
                         </p>
-                        <p className="text-xs text-red-600">
-                          {payment.days_overdue} days overdue
-                        </p>
+                        <div className="flex items-center justify-end space-x-2 mt-1">
+                          <Badge variant="destructive">
+                            {payment.days_overdue} days overdue
+                          </Badge>
+                          <ActionDropdown
+                            actions={[
+                              { id: 'remind', label: 'Send Reminder', icon: Send },
+                              { id: 'view', label: 'View Details', icon: Eye },
+                              { id: 'call', label: 'Call Tenant', icon: CreditCard }
+                            ]}
+                            onActionSelect={(action) => {
+                              console.log(`${action} payment:`, payment.id)
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -490,59 +770,70 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = () => {
                   Manage payments →
                 </Link>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Quick Actions */}
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Link
-              to="/payments/new"
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <CreditCard className="h-6 w-6 text-primary-600 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Record Payment</p>
-                <p className="text-xs text-gray-500">Log a payment received</p>
-              </div>
-            </Link>
-            
-            <Link
-              to="/expenses/new"
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <TrendingDown className="h-6 w-6 text-red-600 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Add Expense</p>
-                <p className="text-xs text-gray-500">Record property expense</p>
-              </div>
-            </Link>
-            
-            <Link
-              to="/reports/financial"
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <BarChart3 className="h-6 w-6 text-blue-600 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Financial Report</p>
-                <p className="text-xs text-gray-500">Generate detailed report</p>
-              </div>
-            </Link>
-            
-            <Link
-              to="/tax-documents"
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <FileText className="h-6 w-6 text-green-600 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Tax Documents</p>
-                <p className="text-xs text-gray-500">Prepare tax statements</p>
-              </div>
-            </Link>
-          </div>
-        </div>
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Link to="/payments/new">
+                <div className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  <CreditCard className="h-6 w-6 text-primary-600 mr-3" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Record Payment</p>
+                    <p className="text-xs text-gray-500">Log a payment received</p>
+                  </div>
+                </div>
+              </Link>
+              
+              <Link to="/expenses/new">
+                <div className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  <TrendingDown className="h-6 w-6 text-red-600 mr-3" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Add Expense</p>
+                    <p className="text-xs text-gray-500">Record property expense</p>
+                  </div>
+                </div>
+              </Link>
+              
+              <Link to="/reports/financial">
+                <div className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  <BarChart3 className="h-6 w-6 text-blue-600 mr-3" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Financial Report</p>
+                    <p className="text-xs text-gray-500">Generate detailed report</p>
+                  </div>
+                </div>
+              </Link>
+              
+              <Link to="/tax-documents">
+                <div className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  <FileText className="h-6 w-6 text-green-600 mr-3" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Tax Documents</p>
+                    <p className="text-xs text-gray-500">Prepare tax statements</p>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDelete}
+          title="Delete Transaction"
+          message="Are you sure you want to delete this transaction? This action cannot be undone."
+          confirmText="Delete"
+          variant="destructive"
+        />
       </div>
     </MainLayout>
   )

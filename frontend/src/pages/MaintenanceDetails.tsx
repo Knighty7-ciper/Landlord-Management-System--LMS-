@@ -26,10 +26,18 @@ import {
   Upload,
   FileText,
   Building2,
-  Wrench
+  Wrench,
+  MoreVertical,
+  Star
 } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import MainLayout from '@/components/layout/MainLayout'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { ActionDropdown } from '@/components/ui/ActionDropdown'
+import { ConfirmationModal } from '@/components/ui/ConfirmationModal'
+import { Select } from '@/components/ui/Select'
 
 // Mock maintenance request data
 const mockMaintenanceRequest = {
@@ -119,6 +127,45 @@ interface UpdateFormData {
 
 interface MaintenanceDetailsProps {}
 
+interface MaintenanceRequest {
+  id: string
+  title: string
+  description: string
+  property_name: string
+  unit_number: string
+  property_address: string
+  tenant_name: string
+  tenant_email: string
+  tenant_phone: string
+  category: string
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  assigned_to: string | null
+  assigned_contact: string | null
+  assigned_phone: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+  estimated_cost: number
+  actual_cost: number | null
+  access_instructions: string
+  images: Array<{ id: string; url: string; description: string }>
+  notes: Array<{
+    id: string
+    author: string
+    content: string
+    created_at: string
+    type: string
+  }>
+  timeline: Array<{
+    id: string
+    action: string
+    description: string
+    author: string
+    created_at: string
+  }>
+}
+
 const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -127,6 +174,8 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [newNote, setNewNote] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [maintenanceRequest, setMaintenanceRequest] = useState<MaintenanceRequest>(mockMaintenanceRequest)
 
   const {
     control,
@@ -206,39 +255,6 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
     setNewNote('')
   }
 
-  // Status update helper
-  const getStatusBadgeColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'scheduled':
-        return 'bg-blue-100 text-blue-800'
-      case 'in_progress':
-        return 'bg-purple-100 text-purple-800'
-      case 'completed':
-        return 'bg-green-100 text-green-800'
-      case 'cancelled':
-        return 'bg-gray-100 text-gray-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getPriorityBadgeColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'low':
-        return 'bg-gray-100 text-gray-800'
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'high':
-        return 'bg-orange-100 text-orange-800'
-      case 'urgent':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -311,35 +327,60 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{request.title}</h1>
               <div className="flex items-center space-x-3 mt-1">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(request.status)}`}>
+                <Badge
+                  variant={
+                    request.status === 'completed' ? 'success' :
+                    request.status === 'in_progress' ? 'default' :
+                    request.status === 'pending' ? 'warning' :
+                    request.status === 'scheduled' ? 'secondary' : 'destructive'
+                  }
+                >
                   {request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}
-                </span>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityBadgeColor(request.priority)}`}>
+                </Badge>
+                <Badge
+                  variant={
+                    request.priority === 'urgent' ? 'destructive' :
+                    request.priority === 'high' ? 'warning' :
+                    request.priority === 'medium' ? 'default' : 'secondary'
+                  }
+                >
                   {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)} Priority
-                </span>
+                </Badge>
                 <span className="text-sm text-gray-500">#{request.id}</span>
               </div>
             </div>
           </div>
           
           <div className="flex items-center space-x-3">
-            <button
+            <Button
+              variant={isEditing ? "outline" : "default"}
               onClick={() => setIsEditing(!isEditing)}
-              className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md ${
-                isEditing 
-                  ? 'text-gray-700 bg-gray-100 hover:bg-gray-200' 
-                  : 'text-white bg-primary-600 hover:bg-primary-700'
-              }`}
             >
               <Edit2 className="h-4 w-4 mr-2" />
               {isEditing ? 'Cancel' : 'Edit Request'}
-            </button>
+            </Button>
+            
+            <ActionDropdown
+              actions={[
+                { id: 'export', label: 'Export PDF', icon: Download },
+                { id: 'duplicate', label: 'Duplicate Request', icon: Plus },
+                { id: 'archive', label: 'Archive Request', icon: FileText },
+                { id: 'delete', label: 'Delete Request', icon: XCircle, variant: 'destructive' }
+              ]}
+              onActionSelect={(action) => {
+                if (action === 'delete') {
+                  setShowDeleteModal(true)
+                } else {
+                  console.log(`${action} request:`, request.id)
+                }
+              }}
+            />
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="border-b border-gray-200">
+        <Card>
+          <CardHeader>
             <nav className="-mb-px flex">
               {[
                 { id: 'overview', name: 'Overview', icon: FileText },
@@ -361,7 +402,7 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                 </button>
               ))}
             </nav>
-          </div>
+          </CardHeader>
 
           <div className="p-6">
             {/* Overview Tab */}
@@ -379,16 +420,17 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                           name="status"
                           control={control}
                           render={({ field }) => (
-                            <select
-                              {...field}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              placeholder="Select status"
                             >
                               <option value="pending">Pending</option>
                               <option value="scheduled">Scheduled</option>
                               <option value="in_progress">In Progress</option>
                               <option value="completed">Completed</option>
                               <option value="cancelled">Cancelled</option>
-                            </select>
+                            </Select>
                           )}
                         />
                       </div>
@@ -401,15 +443,16 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                           name="priority"
                           control={control}
                           render={({ field }) => (
-                            <select
-                              {...field}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            <Select
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              placeholder="Select priority"
                             >
                               <option value="low">Low</option>
                               <option value="medium">Medium</option>
                               <option value="high">High</option>
                               <option value="urgent">Urgent</option>
-                            </select>
+                            </Select>
                           )}
                         />
                       </div>
@@ -510,17 +553,16 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                     </div>
 
                     <div className="flex justify-end space-x-3">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={() => setIsEditing(false)}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                       >
                         Cancel
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
                       >
                         {isSubmitting ? (
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -528,135 +570,153 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                           <Save className="h-4 w-4 mr-2" />
                         )}
                         Save Changes
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 ) : (
                   /* View Mode */
                   <div className="space-y-6">
                     {/* Request Details */}
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Request Details</h3>
-                      <div className="bg-gray-50 rounded-lg p-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Request Details</CardTitle>
+                      </CardHeader>
+                      <CardContent>
                         <p className="text-gray-700">{request.description}</p>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Property Information */}
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Property Information</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex items-start">
-                          <Building2 className="h-5 w-5 text-gray-400 mt-0.5 mr-3 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{request.property_name}</p>
-                            <p className="text-sm text-gray-600">Unit {request.unit_number}</p>
-                            <p className="text-sm text-gray-500 mt-1 flex items-center">
-                              <MapPin className="h-3 w-3 mr-1" />
-                              {request.property_address}
-                            </p>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Property Information</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="flex items-start">
+                            <Building2 className="h-5 w-5 text-gray-400 mt-0.5 mr-3 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{request.property_name}</p>
+                              <p className="text-sm text-gray-600">Unit {request.unit_number}</p>
+                              <p className="text-sm text-gray-500 mt-1 flex items-center">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {request.property_address}
+                              </p>
+                            </div>
                           </div>
-                        </div>
 
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 mb-2">Tenant Information</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center text-sm text-gray-600">
-                              <User className="h-4 w-4 mr-2" />
-                              {request.tenant_name}
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Mail className="h-4 w-4 mr-2" />
-                              <a href={`mailto:${request.tenant_email}`} className="text-primary-600 hover:text-primary-800">
-                                {request.tenant_email}
-                              </a>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Phone className="h-4 w-4 mr-2" />
-                              <a href={`tel:${request.tenant_phone}`} className="text-primary-600 hover:text-primary-800">
-                                {request.tenant_phone}
-                              </a>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 mb-2">Tenant Information</p>
+                            <div className="space-y-2">
+                              <div className="flex items-center text-sm text-gray-600">
+                                <User className="h-4 w-4 mr-2" />
+                                {request.tenant_name}
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Mail className="h-4 w-4 mr-2" />
+                                <a href={`mailto:${request.tenant_email}`} className="text-primary-600 hover:text-primary-800">
+                                  {request.tenant_email}
+                                </a>
+                              </div>
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Phone className="h-4 w-4 mr-2" />
+                                <a href={`tel:${request.tenant_phone}`} className="text-primary-600 hover:text-primary-800">
+                                  {request.tenant_phone}
+                                </a>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Assignment & Cost */}
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Assignment & Cost</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          {request.assigned_to ? (
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">Assigned To</p>
-                              <p className="text-sm text-gray-600">{request.assigned_to}</p>
-                              {request.assigned_contact && (
-                                <p className="text-sm text-gray-600">Contact: {request.assigned_contact}</p>
-                              )}
-                              {request.assigned_phone && (
-                                <p className="text-sm text-gray-600">
-                                  Phone: <a href={`tel:${request.assigned_phone}`} className="text-primary-600 hover:text-primary-800">
-                                    {request.assigned_phone}
-                                  </a>
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-gray-500">Not assigned yet</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-500">Estimated Cost</span>
-                              <span className="text-sm font-medium text-gray-900">
-                                {formatCurrency(request.estimated_cost)}
-                              </span>
-                            </div>
-                            {request.actual_cost && (
-                              <div className="flex justify-between">
-                                <span className="text-sm text-gray-500">Actual Cost</span>
-                                <span className="text-sm font-medium text-green-600">
-                                  {formatCurrency(request.actual_cost)}
-                                </span>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Assignment & Cost</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            {request.assigned_to ? (
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">Assigned To</p>
+                                <p className="text-sm text-gray-600">{request.assigned_to}</p>
+                                {request.assigned_contact && (
+                                  <p className="text-sm text-gray-600">Contact: {request.assigned_contact}</p>
+                                )}
+                                {request.assigned_phone && (
+                                  <p className="text-sm text-gray-600">
+                                    Phone: <a href={`tel:${request.assigned_phone}`} className="text-primary-600 hover:text-primary-800">
+                                      {request.assigned_phone}
+                                    </a>
+                                  </p>
+                                )}
                               </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">Not assigned yet</p>
                             )}
                           </div>
+
+                          <div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-500">Estimated Cost</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {formatCurrency(request.estimated_cost)}
+                                </span>
+                              </div>
+                              {request.actual_cost && (
+                                <div className="flex justify-between">
+                                  <span className="text-sm text-gray-500">Actual Cost</span>
+                                  <span className="text-sm font-medium text-green-600">
+                                    {formatCurrency(request.actual_cost)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Access Instructions */}
                     {request.access_instructions && (
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Access Instructions</h3>
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          <p className="text-sm text-blue-800">{request.access_instructions}</p>
-                        </div>
-                      </div>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Access Instructions</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p className="text-sm text-blue-800">{request.access_instructions}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
                     )}
 
                     {/* Timeline Summary */}
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Timeline</h3>
-                      <div className="space-y-3">
-                        {request.timeline.map((event) => (
-                          <div key={event.id} className="flex items-center space-x-3">
-                            <div className="flex-shrink-0">
-                              <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
-                                <Clock className="h-4 w-4 text-primary-600" />
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Timeline</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {request.timeline.map((event) => (
+                            <div key={event.id} className="flex items-center space-x-3">
+                              <div className="flex-shrink-0">
+                                <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                                  <Clock className="h-4 w-4 text-primary-600" />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900">{event.description}</p>
+                                <p className="text-sm text-gray-500">by {event.author} • {formatDate(event.created_at)}</p>
                               </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">{event.description}</p>
-                              <p className="text-sm text-gray-500">by {event.author} • {formatDate(event.created_at)}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 )}
               </div>
@@ -664,34 +724,38 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
 
             {/* Timeline Tab */}
             {activeTab === 'timeline' && (
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-6">Activity Timeline</h3>
-                <div className="space-y-6">
-                  {request.timeline.map((event, index) => (
-                    <div key={event.id} className="relative">
-                      {index !== request.timeline.length - 1 && (
-                        <div className="absolute left-4 top-8 w-px h-full bg-gray-200"></div>
-                      )}
-                      <div className="flex items-start space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
-                            {event.action === 'created' && <Plus className="h-4 w-4 text-primary-600" />}
-                            {event.action === 'assigned' && <User className="h-4 w-4 text-primary-600" />}
-                            {event.action === 'status_changed' && <Edit2 className="h-4 w-4 text-primary-600" />}
-                            {event.action === 'completed' && <CheckCircle className="h-4 w-4 text-primary-600" />}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {request.timeline.map((event, index) => (
+                      <div key={event.id} className="relative">
+                        {index !== request.timeline.length - 1 && (
+                          <div className="absolute left-4 top-8 w-px h-full bg-gray-200"></div>
+                        )}
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                              {event.action === 'created' && <Plus className="h-4 w-4 text-primary-600" />}
+                              {event.action === 'assigned' && <User className="h-4 w-4 text-primary-600" />}
+                              {event.action === 'status_changed' && <Edit2 className="h-4 w-4 text-primary-600" />}
+                              {event.action === 'completed' && <CheckCircle className="h-4 w-4 text-primary-600" />}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0 pb-6">
+                            <p className="text-sm font-medium text-gray-900">{event.description}</p>
+                            <p className="text-sm text-gray-500">
+                              by {event.author} on {formatDate(event.created_at)}
+                            </p>
                           </div>
                         </div>
-                        <div className="flex-1 min-w-0 pb-6">
-                          <p className="text-sm font-medium text-gray-900">{event.description}</p>
-                          <p className="text-sm text-gray-500">
-                            by {event.author} on {formatDate(event.created_at)}
-                          </p>
-                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Photos & Documents Tab */}
@@ -700,13 +764,13 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium text-gray-900">Photos & Documents</h3>
                   <div className="flex space-x-3">
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={() => document.getElementById('file-upload')?.click()}
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                     >
                       <Upload className="h-4 w-4 mr-2" />
                       Upload Files
-                    </button>
+                    </Button>
                     <input
                       id="file-upload"
                       type="file"
@@ -797,62 +861,80 @@ const MaintenanceDetails: React.FC<MaintenanceDetailsProps> = () => {
                 <h3 className="text-lg font-medium text-gray-900">Notes & Comments</h3>
                 
                 {/* Add Note */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Add New Note
-                  </label>
-                  <div className="flex space-x-3">
-                    <textarea
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      rows={3}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="Add a note or comment..."
-                    />
-                    <button
-                      onClick={addNote}
-                      disabled={!newNote.trim()}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
-                    >
-                      Add Note
-                    </button>
-                  </div>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Add New Note</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex space-x-3">
+                      <textarea
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        rows={3}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        placeholder="Add a note or comment..."
+                      />
+                      <Button
+                        onClick={addNote}
+                        disabled={!newNote.trim()}
+                      >
+                        Add Note
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Notes List */}
                 <div className="space-y-4">
                   {request.notes.map((note) => (
-                    <div key={note.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
-                            <span className="text-xs font-medium text-gray-600">
-                              {note.author.split(' ').map(n => n[0]).join('')}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{note.author}</p>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                note.type === 'tenant_note' ? 'bg-blue-100 text-blue-800' :
-                                note.type === 'vendor_note' ? 'bg-green-100 text-green-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {note.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    <Card key={note.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-3">
+                            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                              <span className="text-xs font-medium text-gray-600">
+                                {note.author.split(' ').map(n => n[0]).join('')}
                               </span>
-                              <span className="text-xs text-gray-500">{formatDate(note.created_at)}</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{note.author}</p>
+                              <div className="flex items-center space-x-2">
+                                <Badge
+                                  variant={
+                                    note.type === 'tenant_note' ? 'default' :
+                                    note.type === 'vendor_note' ? 'success' : 'secondary'
+                                  }
+                                >
+                                  {note.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </Badge>
+                                <span className="text-xs text-gray-500">{formatDate(note.created_at)}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                      <p className="text-sm text-gray-700">{note.content}</p>
-                    </div>
+                        <p className="text-sm text-gray-700">{note.content}</p>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={() => {
+            toast.success('Maintenance request deleted successfully!')
+            navigate('/maintenance')
+          }}
+          title="Delete Maintenance Request"
+          message="Are you sure you want to delete this maintenance request? This action cannot be undone."
+          confirmText="Delete"
+          variant="destructive"
+        />
       </div>
     </MainLayout>
   )

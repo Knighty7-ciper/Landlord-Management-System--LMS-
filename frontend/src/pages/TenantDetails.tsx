@@ -20,9 +20,19 @@ import {
   Plus,
   Download,
   MessageSquare,
-  Loader2
+  Loader2,
+  Eye,
+  Trash2,
+  MailOpen,
+  PhoneCall
 } from 'lucide-react'
 import MainLayout from '@/components/layout/MainLayout'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { ActionDropdown } from '@/components/layout/Dropdown'
+import { DataTable } from '@/components/data/DataTable'
+import { ConfirmationModal } from '@/components/layout/Modal'
 
 // Mock tenant data
 const mockTenant = {
@@ -125,12 +135,72 @@ const mockMaintenanceRequests = [
   }
 ]
 
+interface EmergencyContact {
+  name: string
+  relationship: string
+  phone: string
+  email: string
+}
+
+interface TenantDocument {
+  id: string
+  name: string
+  type: string
+  uploaded_at: string
+}
+
+interface Tenant {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  date_of_birth: string
+  ssn_last_four: string
+  emergency_contact: EmergencyContact
+  property_name: string
+  unit_number: string
+  property_address: string
+  lease_status: 'active' | 'pending' | 'expired' | 'terminated'
+  rent_amount: number
+  deposit_amount: number
+  deposit_paid: boolean
+  lease_start_date: string
+  lease_end_date: string
+  created_at: string
+  notes: string
+  documents: TenantDocument[]
+}
+
+interface Payment {
+  id: string
+  date: string
+  amount: number
+  type: string
+  status: 'paid' | 'late' | 'pending_payment'
+  method: string
+  due_date: string
+  paid_date: string
+}
+
+interface MaintenanceRequest {
+  id: string
+  title: string
+  description: string
+  status: 'completed' | 'in_progress' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  created_at: string
+  completed_at: string | null
+  cost: number | null
+}
+
 interface TenantDetailsProps {}
 
 const TenantDetails: React.FC<TenantDetailsProps> = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // In real implementation, these would be API calls
   const { data: tenant, isLoading } = useQuery(
@@ -183,46 +253,53 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
     }).format(amount)
   }
 
-  const getStatusBadgeColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     switch (status.toLowerCase()) {
       case 'active':
-        return 'bg-green-100 text-green-800'
+        return 'success' as const
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'warning' as const
       case 'expired':
-        return 'bg-red-100 text-red-800'
+        return 'danger' as const
       case 'terminated':
-        return 'bg-gray-100 text-gray-800'
+        return 'secondary' as const
       case 'paid':
-        return 'bg-green-100 text-green-800'
+        return 'success' as const
       case 'late':
-        return 'bg-red-100 text-red-800'
+        return 'danger' as const
       case 'pending_payment':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'warning' as const
       case 'completed':
-        return 'bg-green-100 text-green-800'
+        return 'success' as const
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800'
+        return 'info' as const
       case 'cancelled':
-        return 'bg-gray-100 text-gray-800'
+        return 'secondary' as const
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'secondary' as const
     }
   }
 
-  const getPriorityBadgeColor = (priority: string) => {
+  const getPriorityVariant = (priority: string) => {
     switch (priority.toLowerCase()) {
       case 'low':
-        return 'bg-gray-100 text-gray-800'
+        return 'secondary' as const
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'warning' as const
       case 'high':
-        return 'bg-red-100 text-red-800'
+        return 'danger' as const
       case 'urgent':
-        return 'bg-red-100 text-red-800'
+        return 'danger' as const
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'secondary' as const
     }
+  }
+
+  // Handle tenant deletion
+  const handleDeleteTenant = () => {
+    // In real implementation, this would be an API call
+    toast.success('Tenant deleted successfully')
+    navigate('/tenants')
   }
 
   const calculateAge = (dateOfBirth: string) => {
@@ -288,12 +365,11 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
-            <Link
-              to="/tenants"
-              className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Back to Tenants
+            <Link to="/tenants">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to Tenants
+              </Button>
             </Link>
             <div className="h-4 w-px bg-gray-300" />
             <div className="flex items-center space-x-3">
@@ -314,20 +390,23 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            <Link
-              to={`/tenants/${id}/edit`}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-            >
-              <Edit2 className="h-4 w-4 mr-2" />
-              Edit Tenant
-            </Link>
+            <ActionDropdown
+              items={[
+                { label: 'Edit Tenant', icon: Edit2, onClick: () => navigate(`/tenants/${id}/edit`) },
+                { label: 'View on Map', icon: MapPin, onClick: () => window.open(`https://maps.google.com/?q=${encodeURIComponent(tenant.property_address)}`, '_blank') },
+                { label: 'Send Email', icon: MailOpen, onClick: () => window.location.href = `mailto:${tenant.email}` },
+                { label: 'Call', icon: PhoneCall, onClick: () => window.location.href = `tel:${tenant.phone}` },
+                { type: 'divider' },
+                { label: 'Delete Tenant', icon: Trash2, onClick: () => setShowDeleteModal(true), variant: 'danger' }
+              ]}
+            />
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="mb-6">
+          <Card.Content className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link
                 to={`/leases/new?tenant_id=${id}`}
                 className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -372,11 +451,11 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
                 </div>
               </Link>
             </div>
-          </div>
-        </div>
+          </Card.Content>
+        </Card>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow">
+        <Card>
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex">
               {[
@@ -401,100 +480,125 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
             </nav>
           </div>
 
-          <div className="p-6">
+          <Card.Content className="p-6">
             {/* Overview Tab */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
-                    <dl className="space-y-3">
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Full Name</dt>
-                        <dd className="text-sm text-gray-900">{tenant.first_name} {tenant.last_name}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Email</dt>
-                        <dd className="text-sm text-gray-900">
-                          <a href={`mailto:${tenant.email}`} className="text-primary-600 hover:text-primary-800">
-                            {tenant.email}
-                          </a>
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Phone</dt>
-                        <dd className="text-sm text-gray-900">
-                          <a href={`tel:${tenant.phone}`} className="text-primary-600 hover:text-primary-800">
-                            {tenant.phone}
-                          </a>
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Age</dt>
-                        <dd className="text-sm text-gray-900">{calculateAge(tenant.date_of_birth)} years old</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Date of Birth</dt>
-                        <dd className="text-sm text-gray-900">{formatDate(tenant.date_of_birth)}</dd>
-                      </div>
-                    </dl>
-                  </div>
+                  <Card>
+                    <Card.Header>
+                      <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                        <User className="h-5 w-5 mr-2" />
+                        Personal Information
+                      </h3>
+                    </Card.Header>
+                    <Card.Content>
+                      <dl className="space-y-3">
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Full Name</dt>
+                          <dd className="text-sm text-gray-900">{tenant.first_name} {tenant.last_name}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Email</dt>
+                          <dd className="text-sm text-gray-900">
+                            <a href={`mailto:${tenant.email}`} className="text-primary-600 hover:text-primary-800">
+                              {tenant.email}
+                            </a>
+                          </dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Phone</dt>
+                          <dd className="text-sm text-gray-900">
+                            <a href={`tel:${tenant.phone}`} className="text-primary-600 hover:text-primary-800">
+                              {tenant.phone}
+                            </a>
+                          </dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Age</dt>
+                          <dd className="text-sm text-gray-900">{calculateAge(tenant.date_of_birth)} years old</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Date of Birth</dt>
+                          <dd className="text-sm text-gray-900">{formatDate(tenant.date_of_birth)}</dd>
+                        </div>
+                      </dl>
+                    </Card.Content>
+                  </Card>
 
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h3>
-                    <dl className="space-y-3">
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Name</dt>
-                        <dd className="text-sm text-gray-900">{tenant.emergency_contact.name}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Relationship</dt>
-                        <dd className="text-sm text-gray-900">{tenant.emergency_contact.relationship}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Phone</dt>
-                        <dd className="text-sm text-gray-900">
-                          <a href={`tel:${tenant.emergency_contact.phone}`} className="text-primary-600 hover:text-primary-800">
-                            {tenant.emergency_contact.phone}
-                          </a>
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Email</dt>
-                        <dd className="text-sm text-gray-900">
-                          <a href={`mailto:${tenant.emergency_contact.email}`} className="text-primary-600 hover:text-primary-800">
-                            {tenant.emergency_contact.email}
-                          </a>
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
+                  <Card>
+                    <Card.Header>
+                      <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                        <AlertCircle className="h-5 w-5 mr-2" />
+                        Emergency Contact
+                      </h3>
+                    </Card.Header>
+                    <Card.Content>
+                      <dl className="space-y-3">
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Name</dt>
+                          <dd className="text-sm text-gray-900">{tenant.emergency_contact.name}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Relationship</dt>
+                          <dd className="text-sm text-gray-900">{tenant.emergency_contact.relationship}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Phone</dt>
+                          <dd className="text-sm text-gray-900">
+                            <a href={`tel:${tenant.emergency_contact.phone}`} className="text-primary-600 hover:text-primary-800">
+                              {tenant.emergency_contact.phone}
+                            </a>
+                          </dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Email</dt>
+                          <dd className="text-sm text-gray-900">
+                            <a href={`mailto:${tenant.emergency_contact.email}`} className="text-primary-600 hover:text-primary-800">
+                              {tenant.emergency_contact.email}
+                            </a>
+                          </dd>
+                        </div>
+                      </dl>
+                    </Card.Content>
+                  </Card>
                 </div>
 
                 {/* Property Information */}
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Property Information</h3>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-start">
-                      <Building2 className="h-5 w-5 text-gray-400 mt-0.5 mr-3 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{tenant.property_name}</p>
-                        <p className="text-sm text-gray-600 mt-1">{tenant.property_address}</p>
-                        <p className="text-sm text-gray-600">Unit {tenant.unit_number}</p>
+                <Card>
+                  <Card.Header>
+                    <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                      <Building2 className="h-5 w-5 mr-2" />
+                      Property Information
+                    </h3>
+                  </Card.Header>
+                  <Card.Content>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <Building2 className="h-5 w-5 text-gray-400 mt-0.5 mr-3 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{tenant.property_name}</p>
+                          <p className="text-sm text-gray-600 mt-1">{tenant.property_address}</p>
+                          <p className="text-sm text-gray-600">Unit {tenant.unit_number}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </Card.Content>
+                </Card>
 
                 {/* Notes */}
                 {tenant.notes && (
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Notes</h3>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm text-gray-700">{tenant.notes}</p>
-                    </div>
-                  </div>
+                  <Card>
+                    <Card.Header>
+                      <h3 className="text-lg font-medium text-gray-900">Notes</h3>
+                    </Card.Header>
+                    <Card.Content>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p className="text-sm text-gray-700">{tenant.notes}</p>
+                      </div>
+                    </Card.Content>
+                  </Card>
                 )}
               </div>
             )}
@@ -503,86 +607,107 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
             {activeTab === 'lease' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Lease Information</h3>
-                    <dl className="space-y-3">
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Status</dt>
-                        <dd>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(tenant.lease_status)}`}>
-                            {tenant.lease_status.charAt(0).toUpperCase() + tenant.lease_status.slice(1)}
-                          </span>
-                          {isLeaseExpiringSoon(tenant.lease_end_date) && (
-                            <span className="ml-2 text-xs text-yellow-600">(Expires soon)</span>
-                          )}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Monthly Rent</dt>
-                        <dd className="text-sm text-gray-900 font-semibold">{formatCurrency(tenant.rent_amount)}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Security Deposit</dt>
-                        <dd className="text-sm text-gray-900">{formatCurrency(tenant.deposit_amount)}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Deposit Status</dt>
-                        <dd>
-                          {tenant.deposit_paid ? (
-                            <span className="inline-flex items-center text-green-600">
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Paid
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-red-600">
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Pending
-                            </span>
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
+                  <Card>
+                    <Card.Header>
+                      <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                        <FileText className="h-5 w-5 mr-2" />
+                        Lease Information
+                      </h3>
+                    </Card.Header>
+                    <Card.Content>
+                      <dl className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <dt className="text-sm font-medium text-gray-500">Status</dt>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={getStatusVariant(tenant.lease_status)}>
+                              {tenant.lease_status.charAt(0).toUpperCase() + tenant.lease_status.slice(1)}
+                            </Badge>
+                            {isLeaseExpiringSoon(tenant.lease_end_date) && (
+                              <span className="text-xs text-yellow-600 font-medium">(Expires soon)</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Monthly Rent</dt>
+                          <dd className="text-sm text-gray-900 font-semibold">{formatCurrency(tenant.rent_amount)}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Security Deposit</dt>
+                          <dd className="text-sm text-gray-900">{formatCurrency(tenant.deposit_amount)}</dd>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <dt className="text-sm font-medium text-gray-500">Deposit Status</dt>
+                          <dd>
+                            {tenant.deposit_paid ? (
+                              <span className="inline-flex items-center text-green-600">
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Paid
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center text-red-600">
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Pending
+                              </span>
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                    </Card.Content>
+                  </Card>
 
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Lease Dates</h3>
-                    <dl className="space-y-3">
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Start Date</dt>
-                        <dd className="text-sm text-gray-900">{formatDate(tenant.lease_start_date)}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">End Date</dt>
-                        <dd className="text-sm text-gray-900">{formatDate(tenant.lease_end_date)}</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-sm font-medium text-gray-500">Lease Duration</dt>
-                        <dd className="text-sm text-gray-900">12 months</dd>
-                      </div>
-                    </dl>
-                  </div>
+                  <Card>
+                    <Card.Header>
+                      <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                        <Calendar className="h-5 w-5 mr-2" />
+                        Lease Dates
+                      </h3>
+                    </Card.Header>
+                    <Card.Content>
+                      <dl className="space-y-3">
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Start Date</dt>
+                          <dd className="text-sm text-gray-900">{formatDate(tenant.lease_start_date)}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">End Date</dt>
+                          <dd className="text-sm text-gray-900">{formatDate(tenant.lease_end_date)}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-sm font-medium text-gray-500">Lease Duration</dt>
+                          <dd className="text-sm text-gray-900">12 months</dd>
+                        </div>
+                      </dl>
+                    </Card.Content>
+                  </Card>
                 </div>
 
                 {/* Documents */}
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
-                  <div className="space-y-3">
-                    {tenant.documents.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center">
-                          <FileText className="h-5 w-5 text-gray-400 mr-3" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                            <p className="text-xs text-gray-500">Uploaded {formatDate(doc.uploaded_at)}</p>
+                <Card>
+                  <Card.Header>
+                    <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                      <FileText className="h-5 w-5 mr-2" />
+                      Documents
+                    </h3>
+                  </Card.Header>
+                  <Card.Content>
+                    <div className="space-y-3">
+                      {tenant.documents.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                          <div className="flex items-center">
+                            <FileText className="h-5 w-5 text-gray-400 mr-3" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                              <p className="text-xs text-gray-500">Uploaded {formatDate(doc.uploaded_at)}</p>
+                            </div>
                           </div>
+                          <Button variant="ghost" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <button className="text-primary-600 hover:text-primary-800">
-                          <Download className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                      ))}
+                    </div>
+                  </Card.Content>
+                </Card>
               </div>
             )}
 
@@ -597,52 +722,64 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
                 </div>
 
                 {paymentHistory && paymentHistory.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Type
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Method
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {paymentHistory.map((payment) => (
-                          <tr key={payment.id}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatDate(payment.date)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                              {payment.type.replace('_', ' ')}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {formatCurrency(payment.amount)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {payment.method}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(payment.status)}`}>
-                                {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    data={paymentHistory}
+                    columns={[
+                      {
+                        key: 'date',
+                        label: 'Date',
+                        sortable: true,
+                        render: (payment: Payment) => (
+                          <div className="text-sm text-gray-900">
+                            {formatDate(payment.date)}
+                          </div>
+                        )
+                      },
+                      {
+                        key: 'type',
+                        label: 'Type',
+                        sortable: true,
+                        render: (payment: Payment) => (
+                          <div className="text-sm text-gray-900 capitalize">
+                            {payment.type.replace('_', ' ')}
+                          </div>
+                        )
+                      },
+                      {
+                        key: 'amount',
+                        label: 'Amount',
+                        sortable: true,
+                        render: (payment: Payment) => (
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatCurrency(payment.amount)}
+                          </div>
+                        )
+                      },
+                      {
+                        key: 'method',
+                        label: 'Method',
+                        render: (payment: Payment) => (
+                          <div className="text-sm text-gray-500">
+                            {payment.method}
+                          </div>
+                        )
+                      },
+                      {
+                        key: 'status',
+                        label: 'Status',
+                        render: (payment: Payment) => (
+                          <Badge variant={getStatusVariant(payment.status)}>
+                            {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                          </Badge>
+                        )
+                      }
+                    ]}
+                    emptyState={{
+                      icon: DollarSign,
+                      title: 'No payment history available',
+                      description: 'Payment history will appear here once payments are recorded.'
+                    }}
+                  />
                 ) : (
                   <div className="text-center py-8">
                     <DollarSign className="mx-auto h-12 w-12 text-gray-400" />
@@ -657,56 +794,57 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-medium text-gray-900">Maintenance Requests</h3>
-                  <Link
-                    to={`/maintenance/new?tenant_id=${id}`}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Request
+                  <Link to={`/maintenance/new?tenant_id=${id}`}>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Request
+                    </Button>
                   </Link>
                 </div>
 
                 {maintenanceRequests && maintenanceRequests.length > 0 ? (
                   <div className="space-y-4">
                     {maintenanceRequests.map((request) => (
-                      <div key={request.id} className="border border-gray-200 rounded-lg p-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-medium text-gray-900">{request.title}</h4>
-                          <div className="flex items-center space-x-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityBadgeColor(request.priority)}`}>
-                              {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
-                            </span>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(request.status)}`}>
-                              {request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <p className="text-sm text-gray-600 mb-4">{request.description}</p>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
-                          <div>
-                            <span className="font-medium">Created:</span><br />
-                            {formatDate(request.created_at)}
-                          </div>
-                          {request.completed_at && (
-                            <div>
-                              <span className="font-medium">Completed:</span><br />
-                              {formatDate(request.completed_at)}
+                      <Card key={request.id}>
+                        <Card.Content className="p-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-medium text-gray-900">{request.title}</h4>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant={getPriorityVariant(request.priority)}>
+                                {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
+                              </Badge>
+                              <Badge variant={getStatusVariant(request.status)}>
+                                {request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}
+                              </Badge>
                             </div>
-                          )}
-                          {request.cost && (
-                            <div>
-                              <span className="font-medium">Cost:</span><br />
-                              {formatCurrency(request.cost)}
-                            </div>
-                          )}
-                          <div>
-                            <span className="font-medium">Request ID:</span><br />
-                            #{request.id}
                           </div>
-                        </div>
-                      </div>
+                          
+                          <p className="text-sm text-gray-600 mb-4">{request.description}</p>
+                          
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
+                            <div>
+                              <span className="font-medium">Created:</span><br />
+                              {formatDate(request.created_at)}
+                            </div>
+                            {request.completed_at && (
+                              <div>
+                                <span className="font-medium">Completed:</span><br />
+                                {formatDate(request.completed_at)}
+                              </div>
+                            )}
+                            {request.cost && (
+                              <div>
+                                <span className="font-medium">Cost:</span><br />
+                                {formatCurrency(request.cost)}
+                              </div>
+                            )}
+                            <div>
+                              <span className="font-medium">Request ID:</span><br />
+                              #{request.id}
+                            </div>
+                          </div>
+                        </Card.Content>
+                      </Card>
                     ))}
                   </div>
                 ) : (
@@ -717,8 +855,19 @@ const TenantDetails: React.FC<TenantDetailsProps> = () => {
                 )}
               </div>
             )}
-          </div>
-        </div>
+          </Card.Content>
+        </Card>
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteTenant}
+          title="Delete Tenant"
+          message="Are you sure you want to delete this tenant? This action cannot be undone and will also delete all associated leases and maintenance requests."
+          confirmText="Delete"
+          variant="danger"
+        />
       </div>
     </MainLayout>
   )
